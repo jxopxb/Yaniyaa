@@ -1,0 +1,264 @@
+// =====================================================
+// PRISMA CONFIGURATION
+// สำหรับ Yaniyaa - Better Auth + Neon PostgreSQL (Prisma 7.8)
+// =====================================================
+
+generator client {
+  provider = "prisma-client-js" 
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =====================================================
+// USER MODEL (ระบบจัดการข้อมูลผู้ใช้)
+// =====================================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  role          String    @default("user") 
+
+  // ระบบแบน (Ban System)
+  banned        Boolean?  @default(false)
+  banReason     String?
+  banExpires    DateTime?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  sessions      Session[]
+  accounts      Account[]
+  novels        Novel[]          
+  readingHistories ReadingHistory[] 
+  moderationLogs ModerationLog[]  
+  notifications Notification[]
+  likes         Like[]
+
+  @@map("user")
+}
+
+// =====================================================
+// NOVEL MODEL (ระบบจัดการข้อมูลหลักของนิยาย)
+// =====================================================
+
+model Novel {
+  id              String   @id @default(cuid())
+  title           String
+  slug            String   @unique 
+  description     String?  
+  coverImage      String   
+  category        String   @default("romance")
+  language        String   @default("thai") 
+
+  // ผู้เขียนนิยาย
+  authorId        String
+  author          User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  // สถานะและการตรวจสอบ
+  status          String   @default("pending")
+  rejectionReason String?
+  
+
+  // สถิติข้อมูล
+  rating          Float    @default(0.0) 
+  readers         Int      @default(0)   // 💡 ฟิลด์เดิมปล่อยคาไว้ได้ แต่ต่อไปเราจะนับจากจำนวนแถวใน Relation แทนเพื่อความแม่นยำมึง
+  isPopular       Boolean  @default(false) 
+  type            String   @default("FREE") 
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  chapters        Chapter[]         
+  readingHistories ReadingHistory[] 
+  moderationLogs  ModerationLog[]  
+  likes           Like[]
+
+  // Performance Indexes
+  @@index([status])   
+  @@index([authorId]) 
+  @@index([category]) 
+  @@index([language]) 
+  @@index([createdAt]) // 🔥 [เพิ่มอินเดกซ์ตัวนี้]: เพื่อให้เวลาดึง "นิยายลงล่าสุด" ค้นหาได้เร็วลักชูไม่ติดคอ
+  @@map("novel") 
+}
+
+// =====================================================
+// CHAPTER MODEL (ระบบจัดการตอนย่อยของนิยาย)
+// =====================================================
+
+model Chapter {
+  id            String   @id @default(cuid())
+  title         String   
+  content       String   
+  chapterNumber Int      
+  status        String   @default("draft")
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  novelId       String
+  novel         Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+
+  readingHistories ReadingHistory[]
+
+  @@unique([novelId, chapterNumber])
+  @@index([novelId])
+  @@map("chapter") 
+}
+
+// =====================================================
+// READING HISTORY MODEL (ระบบบันทึกประวัติการอ่านล่าสุด)
+// =====================================================
+
+model ReadingHistory {
+  id          String   @id @default(cuid())
+
+  userId      String
+  novelId     String
+  chapterId   String
+  category    String   @default("romance") // ✨ [เติมเพิ่ม]: ดักเก็บหมวดหมู่ตอนคนกดอ่านไว้วิเคราะห์ความชอบแบบเรียลไทม์
+
+  lastReadAt  DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  novel       Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  chapter     Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, novelId]) // 🔒 ล็อกคอ: 1 คน ต่อ 1 เรื่อง (ใช้นับจำนวนผู้อ่านจริงแบบไม่ซ้ำยอดปั๊มวิว)
+  @@index([userId])
+  @@index([category]) // ✨ [เพิ่มอินเดกซ์]: จัดกลุ่มหมวดหมู่ยอดฮิตของยูสเซอร์ได้ไวขึ้น
+  @@map("reading_history") 
+}
+
+// =====================================================
+// LIKE MODEL (ระบบบันทึกการกดถูกใจนิยาย)
+// =====================================================
+
+model Like {
+  id        String   @id @default(cuid())
+  userId    String
+  novelId   String
+  category  String   // ✨ ดักเก็บหมวดหมู่นิยายที่ยูสเซอร์กดไลก์ (เอาไปคำนวณสถิติความชอบร่วมกับประวัติการอ่าน)
+  createdAt DateTime @default(now())
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  novel     Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, novelId]) // 🔒 ล็อกคอ: กดไลก์เรื่องเดิมซ้ำไม่ได้ (กดอีกทีคือการ Unlike)
+  @@index([userId])
+  @@index([category])
+  @@map("like") // 🟢 สไตล์มินิมอล คลีนๆ บน DB
+}
+
+// =====================================================
+// MODERATION LOG MODEL (ระบบบันทึกประวัติการทำงานของแอดมิน)
+// =====================================================
+
+model ModerationLog {
+  id        String   @id @default(cuid())
+
+  novelId   String
+  adminId   String
+
+  action    String   
+  note      String?  
+
+  createdAt DateTime @default(now())
+
+  // Relations
+  novel     Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  admin     User     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@map("moderation_log") 
+}
+
+// =====================================================
+// BETTER AUTH CORE MODELS (ตารางพื้นฐานสำหรับระบบตรวจสอบสิทธิ์)
+// =====================================================
+
+model Session {
+  id              String   @id @default(cuid())
+  userId          String
+  token           String   @unique
+  expiresAt       DateTime
+  ipAddress       String?
+  userAgent       String?
+  impersonatedBy  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  userId                String
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  idToken               String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("account")
+}
+
+model Verification {
+  id         String    @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime? @default(now())
+  updatedAt  DateTime? @updatedAt
+
+  @@map("verification")
+}
+
+model Notification {
+  id         String   @id @default(cuid())
+
+  title      String
+  content    String
+
+  type       String
+
+  coverUrl   String?
+
+  isRead     Boolean  @default(false)
+
+  isGlobal   Boolean  @default(false)
+
+  userId     String?
+
+  novelId    String?
+  chapterId  String?
+
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("notification")
+}
