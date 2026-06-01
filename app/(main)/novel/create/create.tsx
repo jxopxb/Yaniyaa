@@ -42,7 +42,6 @@ export default function CreateNovelPage() {
     chapters: [{ id: 1, title: "บทนำ: ปฐมบทแห่งโชคชะตา", content: "" }]
   });
 
-  // 🖼️ State สำหรับเลือกโหมดใส่รูปปก
   const [coverMethod, setCoverMethod] = useState<"upload" | "url">("upload");
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -59,7 +58,7 @@ export default function CreateNovelPage() {
     if (editorState.isOpen && editorRef.current) {
       editorRef.current.innerHTML = editorState.tempContent;
     }
-  }, [editorState.isOpen]);
+  }, [editorState.isOpen, editorState.tempContent]);
 
   const toggleDropdown = (name: string) => setActiveDropdown(activeDropdown === name ? null : name);
   const selectOption = (field: string, value: string) => { setFormData(prev => ({ ...prev, [field]: value })); setActiveDropdown(null); };
@@ -69,7 +68,6 @@ export default function CreateNovelPage() {
     setFormData(prev => ({ ...prev, chapters: [...prev.chapters, { id: newId, title: `ตอนใหม่`, content: "" }] }));
   };
 
-  // 🖼️ อัปโหลดรูปภาพ (แปลงเป็น Base64 เพื่อเซฟลง Neon ได้ตรงๆ)
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -85,7 +83,6 @@ export default function CreateNovelPage() {
     }
   };
 
-  // 🔗 ใส่ลิงก์รูปภาพ
   const handleUrlInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({ ...prev, coverUrl: e.target.value, coverFile: null }));
   };
@@ -96,7 +93,11 @@ export default function CreateNovelPage() {
   
   const saveEditorAndClose = () => {
     const newChapters = [...formData.chapters];
-    newChapters[editorState.chapterIndex].content = editorRef.current?.innerHTML || "";
+    // ล้างช่องว่างหลอกที่เกิดจากเบราว์เซอร์ก่อนเซฟ
+    let content = editorRef.current?.innerHTML || "";
+    if (content === "<p><br></p>" || content === "<br>") content = "";
+    
+    newChapters[editorState.chapterIndex].content = content;
     setFormData(prev => ({ ...prev, chapters: newChapters }));
     setEditorState({ isOpen: false, chapterIndex: 0, tempContent: "" });
     setShowEmoji(false);
@@ -112,6 +113,15 @@ export default function CreateNovelPage() {
     const value = e.target.value;
     document.execCommand("formatBlock", false, value);
     editorRef.current?.focus();
+  };
+
+  // 🛡️ [ฟังก์ชันสกัด CSS แฝง]: ป้องกันปัญหากดวางแล้วติดจัดแต่งข้อความจากภายนอกล้นทะลักเข้าเซิร์ฟเวอร์
+  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    // ดึงเฉพาะข้อมูล Text ธรรมดาออกมา โดยข้าม HTML โครงสร้างเดิมที่ติด Style มา
+    const text = e.clipboardData.getData("text/plain");
+    // แทรกลงใน Cursor ตนเองในกล่อง Editor
+    document.execCommand("insertText", false, text);
   };
 
   const handleSave = async (statusType: "draft" | "pending") => {
@@ -184,7 +194,7 @@ export default function CreateNovelPage() {
           {/* Left Column: Cover & Settings */}
           <div className="lg:col-span-4 space-y-6">
             
-            {/* 🖼️ Cover Upload/Link Section */}
+            {/* Cover Upload/Link Section */}
             <div className="space-y-4">
               <div className="cursor-pointer flex items-center gap-2 bg-zinc-100 dark:bg-white/[0.02] p-1 rounded-xl w-full border border-zinc-200/60 dark:border-white/[0.05]">
                 <button 
@@ -405,7 +415,7 @@ export default function CreateNovelPage() {
               </div>
             </div>
 
-            {/* 🎛️ Toolbar สำหรับจัด Format */}
+            {/* Toolbar สำหรับจัด Format */}
             <div className="flex flex-wrap items-center gap-1 p-3 border-b border-border/40 bg-zinc-100/50 dark:bg-white/[0.01]">
               <div className="flex items-center gap-1 pr-3 border-r border-border/40">
                 <select onChange={handleHeadingChange} className="bg-transparent text-xs border border-border/40 rounded-lg px-2 py-1 outline-none cursor-pointer">
@@ -424,7 +434,7 @@ export default function CreateNovelPage() {
               <button onMouseDown={(e) => handleFormat(e, "insertUnorderedList")} className="p-2 rounded-lg hover:bg-zinc-200 dark:hover:bg-white/10 text-muted-foreground transition-colors cursor-pointer"><List size={16} /></button>
               <button onMouseDown={(e) => handleFormat(e, "removeFormat")} className="p-2 rounded-lg hover:bg-zinc-200 dark:hover:bg-white/10 text-muted-foreground transition-colors cursor-pointer" title="ล้าง Format"><Eraser size={16} /></button>
               
-              {/* ✨ Emoji Picker */}
+              {/* Emoji Picker */}
               <div className="relative">
                 <button onMouseDown={(e) => { e.preventDefault(); setShowEmoji(!showEmoji); }} className="p-2 rounded-lg hover:bg-zinc-200 dark:hover:bg-white/10 text-muted-foreground transition-colors cursor-pointer"><Smile size={16} /></button>
                 {showEmoji && (
@@ -453,11 +463,12 @@ export default function CreateNovelPage() {
                 ref={editorRef}
                 contentEditable
                 suppressContentEditableWarning
+                onPaste={handlePaste} // 🟢 แทรกล้างพฤติกรรม Paste จัดการขยะ Inline CSS
                 className="w-full min-h-full bg-transparent outline-none text-base leading-[2.2] font-light text-zinc-800 dark:text-zinc-200 
                 [&>h1]:text-3xl [&>h1]:font-bold [&>h1]:mb-4 [&>h1]:mt-6 
                 [&>h2]:text-2xl [&>h2]:font-semibold [&>h2]:mb-3 [&>h2]:mt-5
                 [&>ul]:list-disc [&>ul]:ml-6 [&>ul]:mb-4
-                [&>p]:mb-4 empty:before:content-['เริ่มเขียนเรื่องราวของคุณตรงนี้...'] empty:before:text-muted-foreground/40"
+                [&>p]:mb-4 empty:before:content-['เริ่มเขียนเรื่องราวของคุณตรงนี้...'] empty:before:text-muted-foreground/40 text-left caret-primary"
               />
             </div>
             
