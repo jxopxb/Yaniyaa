@@ -36,7 +36,7 @@ export default function Latest({ latestNovels }: LatestProps) {
                         </h2>
                     </div>
 
-                    <Link href={session ? "/novel" : "/auth/signin"}>
+                    <Link href={"/novel"}>
                         <button className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-border/40 text-[10px] font-bold text-muted-foreground uppercase tracking-widest hover:bg-primary/5 hover:text-primary hover:border-primary/30 transition-all cursor-pointer">
                             ดูทั้งหมด
                             <ArrowRight className="h-3 w-3" />

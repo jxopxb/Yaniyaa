@@ -86,7 +86,7 @@ export default function Hero() {
 
                     <div className="flex flex-col sm:flex-row items-center gap-5 pt-4">
                         {/* 🟢 [แก้ไข]: ปรับหน้าดีดกลับหน้าล็อกอินให้พุ่งไปที่ /login มินิมอลคลีนๆ */}
-                        <Link href={session ? "/novel" : "/auth/signin"}>
+                        <Link href={"/novel"}>
                             <Button className="cursor-pointer group h-14 px-8 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-novel text-sm tracking-widest uppercase shadow-xl shadow-primary/20 transition-all duration-300 hover:-translate-y-1 active:scale-95">
                                 สัมผัสคลังนิยาย
                                 <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />

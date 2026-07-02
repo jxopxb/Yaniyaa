@@ -161,7 +161,7 @@ export default function Navbar() {
 
     const navLinks = [
         { href: "/", label: "หน้าแรก", id: "home" },
-        { href: session ? "/novel" : "/auth/signin", label: "คลังนิยาย", id: "novel" },
+        { href: "/novel", label: "คลังนิยาย", id: "novel" },
         { href: "/#popular", label: "ยอดนิยม", id: "popular" },
         { href: "/#footer_", label: "ติดต่อเรา", id: "footer_" },
         { href: "/donate", label: "จะเปย์เรา", id: "donate" },
